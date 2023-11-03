@@ -39,6 +39,7 @@ public:
     // Returns false if scripting backing hasn't been setup
     // Get distance from lua script
     virtual bool handle_script_msg(float dist_m) { return false; }
+    virtual bool handle_script_msg_ex(float dist_m, float signal_quality_pct) { return false; }
 #endif
 
 #if HAL_MSP_RANGEFINDER_ENABLED

@@ -166,6 +166,45 @@ class AutoTestSub(vehicle_test_suite.TestSuite):
         self.watch_altitude_maintained()
         self.disarm_vehicle()
 
+    def RngfndQuality(self):
+        """Check lua Range Finder quality information flow"""
+
+        self.set_parameters({
+            "SCR_ENABLE": 1,
+            "RNGFND1_TYPE": 36,
+            "RNGFND1_ORIENT": 25,
+        })
+
+        self.install_test_script_context("rngfnd_quality_test.lua")
+
+        test_complete = []
+
+        def my_message_hook(mav, message):
+            if message.get_type() != 'STATUSTEXT':
+                return
+            if "RQTL Complete:" in message.text:
+                # NOTE: Do not raise an exception from in this hook. Doing so messes
+                # with the flow of messages for the test cleanup.
+                test_complete.append(message.text)
+
+        # install a message hook that looks for the SUCCESS or FAILURE message
+        self.install_message_hook_context(my_message_hook)
+
+        # let the test run. Seem to have to reboot sitl to get scripting enabled. self.scripting_restart()
+        # is insufficient.
+        self.reboot_sitl()
+        self.wait_ready_to_arm()
+
+        timeout = 10
+        tstart = self.get_sim_time()
+        while len(test_complete) == 0:
+            if self.get_sim_time() - tstart > timeout:
+                raise AutoTestTimeoutException("Test timed out after %fs" % (timeout,))
+            self.delay_sim_time(10)
+
+        if "!!FAILURE!!" in test_complete[0]:
+            raise NotAchievedException("RngfndQuality test failed")
+
     def ModeChanges(self, delta=0.2):
         """Check if alternating between ALTHOLD, STABILIZE and POSHOLD affects altitude"""
         self.wait_ready_to_arm()
@@ -522,6 +561,7 @@ class AutoTestSub(vehicle_test_suite.TestSuite):
         ret.extend([
             self.DiveManual,
             self.AltitudeHold,
+            self.RngfndQuality,
             self.PositionHold,
             self.ModeChanges,
             self.DiveMission,

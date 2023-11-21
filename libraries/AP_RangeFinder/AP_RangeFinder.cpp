@@ -692,7 +692,51 @@ float RangeFinder::distance_orient(enum Rotation orientation) const
 
 uint16_t RangeFinder::distance_cm_orient(enum Rotation orientation) const
 {
-    return distance_orient(orientation) * 100.0;
+    uint16_t dist_cm;
+    int8_t signal_quality_pct;
+    distance_cm_orient_ex(orientation, dist_cm, signal_quality_pct);
+    return dist_cm;
+}
+
+void RangeFinder::distance_cm_orient_ex(enum Rotation orientation, uint16_t &dist_cm, int8_t &signal_quality_pct) const
+{
+    AP_RangeFinder_Backend *backend = find_instance(orientation);
+    if (backend == nullptr) {
+        dist_cm = 0.0f;
+        signal_quality_pct = -1;
+        return;
+    }
+
+    // Get the current signal quality. Note that get_si..() has
+    // been careful to return an appropriate value for signal_quality_pct
+    // in all cases.
+    backend->get_signal_quality_pct(signal_quality_pct);
+
+    // Get the distance in cm as a float
+    float fdist_cm = backend->distance() * 100.0f;
+
+    // Check if this distance is less than the min or greater than the max.
+    // Note that this is a change in the behavior of distance_cm_orient. Previously
+    // the out of range distance value would be returned and status attribute would
+    // indicate the out of range distance measurement. This code requires that
+    // the float distance_cm be checked to ensure it will fit in an int16_t.
+    // Instead of comparing with std::numeric_limits<uint16_t>::max(), just
+    // use min_distance_cm and max_distance_cm.
+    if (fdist_cm < static_cast<float>(backend->min_distance_cm()))
+    {
+        dist_cm = static_cast<float>(backend->min_distance_cm());
+        signal_quality_pct = signal_quality_pct >= 0 ? 0 : -1;
+        return;
+    }
+    if (fdist_cm > static_cast<float>(backend->max_distance_cm()))
+    {
+        dist_cm = static_cast<float>(backend->max_distance_cm());
+        signal_quality_pct = signal_quality_pct >= 0 ? 0 : -1;
+        return;
+    }
+
+    // Convert the distance to a uint16_t and return it and the signal_quality_pct
+    dist_cm = static_cast<uint16_t>(fdist_cm);
 }
 
 int8_t RangeFinder::signal_quality_pct_orient(enum Rotation orientation) const
